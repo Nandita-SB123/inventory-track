@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect } from "react";
-import { firestore } from "../firebase"; // Adjust this path based on your file structure
+import { firestore } from "../firebase";
 import { Box, Button, TextField, Typography, Modal, Stack } from "@mui/material";
 import { collection, getDocs, query, getDoc, deleteDoc, setDoc, addDoc, doc } from "@firebase/firestore";
 
@@ -9,23 +9,16 @@ export default function Home() {
   const [inventory, setInventory] = useState([]);
   const [open, setOpen] = useState(false);
   const [itemName, setitemName] = useState('');
+  const [search, setSearch] = useState('');
+  const [result, setResult] = useState(null);
 
-  // Now we wanna fetch database from firebase
-  // Function 1: update inventory
-
-  /* Convention, if u have an async function u wanna call in useEffect, better to define it in the useEffect and call it immediately. */ 
 
   const updateInventory = async () => {
-    // First, snapshot of collection database from firebase
-    // So this means I made a query, to fetch a collection from my firestore instance named inventory.
     const snapshot = query(collection(firestore, 'inventory'));
-    // coz u wanna get all docs
+
     const docs = await getDocs(snapshot);
-    // Now adding each doc to inventory list.
     const inventorylist = [];
     docs.forEach((doc) => {
-      // ur pushing an object for every doc w name
-      // Coz all its data comes as an object itself, so ur just adding name to it then pushing.
       inventorylist.push({
         name: doc.id,
         ...doc.data()
@@ -36,23 +29,16 @@ export default function Home() {
   }
 
   useEffect(() => {
-    // Async so firebase can take its own time
-  // Otherwise entire site freezes while fetching
-
   updateInventory();
   }, []);
 
   const removeItems = async (item) => {
-    /* Difference btwn this code and previous code:
-    This one: creates reference to item doc and then gets the doc using getDoc
-    Previous one: creates reference to collection, then gets all docs from it using getDocs */
     if (!item) return;
     const docRef = doc(collection(firestore, 'inventory'), item);
     const docSnap = await getDoc(docRef);
 
     if (docSnap.exists()) {
-      // takes just the quantity property of data object
-      const {quantity} = docSnap.data;
+      const {quantity} = docSnap.data();
       if (quantity === 1) {
         await deleteDoc(docRef)
       }
@@ -60,7 +46,6 @@ export default function Home() {
         await setDoc(docRef, {quantity: quantity - 1})
       }
     }
-    // Coz it won't automatically be updated locally. U need to call this.
     await updateInventory();
   }
 
@@ -73,20 +58,40 @@ export default function Home() {
       await setDoc(docRef, {quantity: quantity + 1})
     }
     else {
-      // ig setDoc just makes one if its not there
       await setDoc(docRef, {quantity: 1})
     }
+
+    await updateInventory();
   }
 
   const handleOpen = () => setOpen(true)
   const handleClose = () => setOpen(false)
 
-  // Note: stack like box, but everything stored in stack like form, not sure what that means, check.
+  const searchItem = () => {
+    if(!search) {
+      setResult(null)
+    }
+    const res = inventory.filter(({name, quantity}) => name.toLowerCase() == search.toLowerCase())
+    if (res.length > 0) {
+      setResult(res[0]);
+    }
+  } 
+
+  useEffect(() => searchItem(), [search]);
 
   return (
     <>
-    <Box width="100vw" height="100vh" display="flex" justifyContent="center" alignItems="center" gap={2}>
-      <Typography variant="h1">Inventory Tracker</Typography>
+    <Typography variant="h1" align="center" justifyContent="center">Inventory Tracker</Typography>
+
+    <Box display="flex" justifyContent="center" alignItems="center" gap={2}
+    flexDirection="column" overflow="auto" marginTop={5}>
+      <Button variant="contained" color="secondary" align="center" onClick={() =>
+      handleOpen()
+    }> Add New Item </Button>
+    </Box>
+
+    <Box display="flex" justifyContent="center" alignItems="center" gap={2}
+    flexDirection="column" overflow="auto" marginTop={5}>
       <Modal open={open} onClose={handleClose}>
       <Box position="absolute" top="50%" left="50%"
       width={400}
@@ -117,12 +122,62 @@ export default function Home() {
       </Box>
 
     </Modal>
-    <Button variant="contained" onClick={() =>
-      handleOpen()
-    }> Add Item </Button>
+    <Box border="1 px solid #333" alignSelf="center">
+
+      <Box width="800px" height="100px" bgcolor="violet">
+        <Typography variant="h2" color="#333" alignItems="center" justifyContent="center" display="flex"
+        > Inventory Items </Typography>
+      </Box>
+
+    <Stack width="800px" height="300px" spacing={2} overflow="auto" marginBottom={5}>
+
+        {inventory.map(({name, quantity}) => (
+          <Box key={name} width="100%" minHeight="150px" display="flex" 
+          alignItems="center" justifyContent="space-between" bgcolor="#f0f0f0" padding={5}>
+
+            <Typography variant="h3" color="#333" textAlign="center">
+              {name.charAt(0).toUpperCase() + name.slice(1)}
+              </Typography>
+            <Typography variant="h3" color="#333" textAlign="center">
+               {quantity}
+              </Typography>
+            <Stack direction="row" spacing={2}>
+              <Button variant="contained" onClick={() => addItems(name)}> Add </Button>
+              <Button variant="contained" onClick={() => removeItems(name)}> Remove </Button>
+              </Stack>        
+
+          </Box>
+        ))
+        }
+      </Stack>
+
+      <TextField variant="outlined" fullWidth value={search} onChange={(e) => setSearch(e.target.value)}
+        placeholder="Search for an item">
+      </TextField>
+
+      <Stack width="800px" height="300px" spacing={2} overflow="auto">
+
+        {result ? (
+          <Box key={result.name} width="100%" minHeight="150px" display="flex" border="1 px solid black" 
+          alignItems="center" justifyContent="space-between" bgcolor="#d0d0d0" padding={5} >
+
+            <Typography variant="h3" color="#333" textAlign="center">
+              {result.name.charAt(0).toUpperCase() + result.name.slice(1)}
+              </Typography>
+            <Typography variant="h3" color="#333" textAlign="center">
+               {result.quantity}
+              </Typography>
+            <Stack direction="row" spacing={2}>
+              <Button variant="contained" onClick={() => addItems(result.name)}> Add </Button>
+              <Button variant="contained" onClick={() => removeItems(result.name)}> Remove </Button>
+              </Stack>
+          </Box>
+        ) : 
+        null
+        }
+      </Stack>
     </Box>
-    
-    
+    </Box>
     </>
   );
 }
